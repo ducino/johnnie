@@ -2,47 +2,56 @@
 #include <cmath>
 #include <iostream>
 
-Projectile::Projectile(sf::Vector2f position, sf::Vector2f direction, float speed)
-: m_position(position), m_direction(direction), m_speed(speed)
-{
-
-}
-
-void Projectile::update(float elapsed_s)
-{
-    m_position += m_direction*m_speed*elapsed_s;
-}
-
-void Projectile::draw(sf::RenderWindow& window)
-{
-    float radius = 5.f;
-    sf::CircleShape shape(radius);
-    shape.setFillColor(sf::Color::Yellow);
-    shape.setOrigin(sf::Vector2f(radius, radius));
-    shape.setPosition(m_position);
-
-    window.draw(shape);
-}
-
-float Projectile::distSquared(sf::Vector2f position)
-{
-    sf::Vector2f d = m_position - position;
-
-    return d.x*d.x + d.y*d.y;
-}
-
 Turret::Turret(sf::RenderWindow& window)
 : Game(window),
   m_turretAngleDegrees(0.f),
-  m_firePeriod(100)
+  m_firePeriod(100),
+  m_spawnPeriod(3000)
 {
-    m_targets.push_back(sf::Vector2f(100, 100));
-    m_targets.push_back(sf::Vector2f(200, 100));
-    m_targets.push_back(sf::Vector2f(200, 500));
-    m_targets.push_back(sf::Vector2f(600, 500));
+    if (!m_shotBuffer.loadFromFile("snd/shot1.ogg"))
+    {
+        std::cout << "Error loading shot1.ogg";
+    }
+    else
+    {
+        m_shotSound.setBuffer(m_shotBuffer);
+    }
+
+    if (!m_hitBuffer.loadFromFile("snd/hit1.ogg"))
+    {
+        std::cout << "Error loading hit1.ogg";
+    }
+    else
+    {
+        m_hitSound.setBuffer(m_hitBuffer);
+    }
 }
 
 void Turret::update(float elapsed_s)
+{
+    fireTurret();
+
+    updateProjectiles(elapsed_s);
+
+    drawTurret();
+    drawProjectiles();
+    cleanupProjectiles();
+
+    spawnTargets();
+    drawTargets();
+}
+
+void Turret::fireSound()
+{
+    m_shotSound.play();
+}
+
+void Turret::hitSound()
+{
+    m_hitSound.play();
+}
+
+void Turret::fireTurret()
 {
     float pi = std::atan(1)*4;//TODO Cache
 
@@ -61,8 +70,6 @@ void Turret::update(float elapsed_s)
         m_turretAngleDegrees = (angle*180./pi - 90.f);
     }
 
-    //m_turretAngleDegrees += angleDiff*angleSpeed*elapsed_s;
-
     if ( sf::Joystick::isButtonPressed(0, 0) && m_fireClock.getElapsedTime().asMilliseconds() > m_firePeriod)
     {
         m_fireClock.restart();
@@ -70,8 +77,12 @@ void Turret::update(float elapsed_s)
         float turretAngleRadians = (m_turretAngleDegrees+90.f)*pi/180.f;
         sf::Vector2f direction(cos(turretAngleRadians), sin(turretAngleRadians));
         m_projectiles.push_back(Projectile(m_window.getView().getCenter()+direction*70.f, direction, 500.f));
+        fireSound();
     }
+}
 
+void Turret::updateProjectiles(float elapsed_s)
+{
     for (std::list<Projectile>::iterator it = m_projectiles.begin(); it != m_projectiles.end(); ++it)
     {
         bool hit = false;
@@ -87,19 +98,13 @@ void Turret::update(float elapsed_s)
         if(hit)
         {
             it = m_projectiles.erase(it);
+            hitSound();
         }
         else
         {
             it->update(elapsed_s);
         }
     }
-
-    drawTurret();
-    drawProjectiles();
-    cleanupProjectiles();
-
-    spawnTargets();
-    drawTargets();
 }
 
 void Turret::drawTurret()
@@ -151,7 +156,24 @@ void Turret::cleanupProjectiles()
 
 void Turret::spawnTargets()
 {
+    #define SQR(x) (x)*(x)
+    if ( m_spawnClock.getElapsedTime().asMilliseconds() > m_spawnPeriod )
+    {
+        m_spawnClock.restart();
 
+        sf::Vector2f windowSize = m_window.getView().getSize();
+        sf::Vector2f center = m_window.getView().getCenter();
+
+        int x, y;
+        do
+        {
+            x = std::rand()% (int)windowSize.x;
+            y = std::rand()% (int)windowSize.y;
+        }
+        while(SQR(x-center.x) + SQR(y-center.y) < SQR(200));
+
+        m_targets.push_back(sf::Vector2f(x, y));
+    }
 }
 
 void Turret::drawTargets()

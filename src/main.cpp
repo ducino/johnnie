@@ -5,7 +5,7 @@
 
 int main()
 {
-    sf::RenderWindow window(sf::VideoMode(800, 600), "Game");
+    sf::RenderWindow window(sf::VideoMode(800, 600), "Johnnie v0.0");
 
     std::auto_ptr<Game> game(new Turret(window));
 
